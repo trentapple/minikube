@@ -37,34 +37,6 @@ func TestRunCmdWarnSlowOnce(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		return
 	}
-
-	func TestPrefixCmdPodmanExternalHostSkipsSudo(t *testing.T) {
-		if runtime.GOOS != "linux" {
-			t.Skip("linux-only podman sudo behavior")
-		}
-		resetPodmanRootlessProbe()
-		t.Setenv("MINIKUBE_ROOTLESS", "false")
-		t.Setenv("CONTAINER_HOST", "ssh://127.0.0.1/run/user/1000/podman/podman.sock")
-
-		cmd := PrefixCmd(exec.Command(Podman, "version"))
-		if cmd.Args[0] == "sudo" {
-			t.Fatalf("expected external podman command without sudo, got %q", strings.Join(cmd.Args, " "))
-		}
-	}
-
-	func TestPrefixCmdPodmanRootlessForcedSkipsSudo(t *testing.T) {
-		if runtime.GOOS != "linux" {
-			t.Skip("linux-only podman sudo behavior")
-		}
-		resetPodmanRootlessProbe()
-		t.Setenv("MINIKUBE_ROOTLESS", "true")
-		t.Setenv("CONTAINER_HOST", "")
-
-		cmd := PrefixCmd(exec.Command(Podman, "version"))
-		if cmd.Args[0] == "sudo" {
-			t.Fatalf("expected rootless podman command without sudo, got %q", strings.Join(cmd.Args, " "))
-		}
-	}
 	f1 := tests.NewFakeFile()
 	out.SetErrFile(f1)
 
@@ -91,5 +63,33 @@ func TestRunCmdWarnSlowOnce(t *testing.T) {
 
 	if strings.Contains(f2.String(), "Executing \"sleep 3\" took an unusually long time") {
 		t.Errorf("runCmd does not print the correct log, instead print :%v", f2.String())
+	}
+}
+
+func TestPrefixCmdPodmanExternalHostSkipsSudo(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux-only podman sudo behavior")
+	}
+	resetPodmanRootlessProbe()
+	t.Setenv("MINIKUBE_ROOTLESS", "false")
+	t.Setenv("CONTAINER_HOST", "ssh://127.0.0.1/run/user/1000/podman/podman.sock")
+
+	cmd := PrefixCmd(exec.Command(Podman, "version"))
+	if cmd.Args[0] == "sudo" {
+		t.Fatalf("expected external podman command without sudo, got %q", strings.Join(cmd.Args, " "))
+	}
+}
+
+func TestPrefixCmdPodmanRootlessForcedSkipsSudo(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux-only podman sudo behavior")
+	}
+	resetPodmanRootlessProbe()
+	t.Setenv("MINIKUBE_ROOTLESS", "true")
+	t.Setenv("CONTAINER_HOST", "")
+
+	cmd := PrefixCmd(exec.Command(Podman, "version"))
+	if cmd.Args[0] == "sudo" {
+		t.Fatalf("expected rootless podman command without sudo, got %q", strings.Join(cmd.Args, " "))
 	}
 }
