@@ -41,8 +41,23 @@ func RoutableHostIPFromInside(ociBin string, clusterName string, containerName s
 	}
 	if si.Rootless {
 		if IsExternalDaemonHost(ociBin) {
-			return nil, errors.New("function RoutableHostIPFromInside is not implemented for external rootless daemons")
-			// TODO: parse DaemonHost()
+			host := DaemonHost(ociBin)
+			if ip := net.ParseIP(host); ip != nil {
+				return ip, nil
+			}
+			addrs, err := net.LookupIP(host)
+			if err != nil {
+				return nil, fmt.Errorf("resolve external daemon host %q: %w", host, err)
+			}
+			for _, addr := range addrs {
+				if v4 := addr.To4(); v4 != nil {
+					return v4, nil
+				}
+			}
+			if len(addrs) > 0 {
+				return addrs[0], nil
+			}
+			return nil, fmt.Errorf("no IPs found for external daemon host %q", host)
 		}
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {

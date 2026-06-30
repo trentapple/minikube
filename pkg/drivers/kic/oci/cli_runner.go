@@ -38,6 +38,9 @@ import (
 
 var warnLock sync.Mutex
 var alreadyWarnedCmds = make(map[string]bool)
+var podmanRootlessProbeOnce sync.Once
+var podmanRootlessDetected bool
+var podmanRootlessDetectionDone bool
 
 // RunResult holds the results of a Runner
 type RunResult struct {
@@ -105,7 +108,7 @@ func PrefixCmd(cmd *exec.Cmd, opt ...PrefixCmdOption) *exec.Cmd {
 	for _, f := range opt {
 		f(&o)
 	}
-	if cmd.Args[0] == Podman && runtime.GOOS == "linux" && !IsRootlessForced() { // want sudo when not running podman-remote
+	if shouldUsePodmanSudo(cmd) {
 		cmdWithSudo := exec.Command("sudo", append(append([]string{"-n"}, o.sudoFlags...), cmd.Args...)...)
 		cmdWithSudo.Env = cmd.Env
 		cmdWithSudo.Dir = cmd.Dir
@@ -115,6 +118,43 @@ func PrefixCmd(cmd *exec.Cmd, opt ...PrefixCmdOption) *exec.Cmd {
 		cmd = cmdWithSudo
 	}
 	return cmd
+}
+
+func shouldUsePodmanSudo(cmd *exec.Cmd) bool {
+	if cmd.Args[0] != Podman || runtime.GOOS != "linux" {
+		return false
+	}
+	return !IsExternalDaemonHost(Podman) && !podmanRootless()
+}
+
+func shouldUsePodmanCgroupManager() bool {
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	return !IsExternalDaemonHost(Podman) && !podmanRootless()
+}
+
+func podmanRootless() bool {
+	if IsRootlessForced() {
+		return true
+	}
+	podmanRootlessProbeOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		out, err := exec.CommandContext(ctx, Podman, "info", "--format", "{{.Host.Security.Rootless}}").Output()
+		if err != nil {
+			return
+		}
+
+		rootless, err := strconv.ParseBool(strings.TrimSpace(string(out)))
+		if err != nil {
+			return
+		}
+		podmanRootlessDetected = rootless
+		podmanRootlessDetectionDone = true
+	})
+	return podmanRootlessDetectionDone && podmanRootlessDetected
 }
 
 func suppressDockerMessage() bool {
